@@ -1,6 +1,7 @@
 /**
  * AppNavigator — Root navigation KitaFoto
  * User flow (kiosk) + Admin flow
+ * Updated Phase 2: semua user screens sudah real implementation
  */
 
 import React from 'react';
@@ -8,12 +9,18 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Routes } from '@constants/routes';
 
-// ── User Screens ─────────────────────────────────────────
-import { HomeScreen } from '@screens/user/HomeScreen';
-import { CountdownScreen } from '@screens/user/CountdownScreen';
-import { DoneScreen } from '@screens/user/DoneScreen';
+// ── User Screens (eager load — sering dipakai) ────────────────
+import { HomeScreen }        from '@screens/user/HomeScreen';
+import { CountdownScreen }   from '@screens/user/CountdownScreen';
+import { CameraScreen }      from '@screens/user/CameraScreen';
+import { ProcessingScreen }  from '@screens/user/ProcessingScreen';
+import { DoneScreen }        from '@screens/user/DoneScreen';
+import { FramePickerScreen } from '@screens/user/FramePickerScreen';
 
-// ── Admin Screens (lazy import untuk hemat memory) ────────
+// ── Preview screen (inline ringan) ───────────────────────────
+import { PreviewScreen } from '@screens/user/PreviewScreen';
+
+// ── Admin Screens (lazy import — jarang dipakai) ──────────────
 const AdminLoginScreen = React.lazy(
   () => import('@screens/admin/AdminLoginScreen').then(m => ({ default: m.AdminLoginScreen }))
 );
@@ -21,16 +28,35 @@ const AdminDashboard = React.lazy(
   () => import('@screens/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard }))
 );
 
-// ── Placeholder screens (akan dibuat di phase berikutnya) ─
 import { PlaceholderScreen } from './PlaceholderScreen';
 
 const Stack = createStackNavigator();
 
 const screenOptions = {
-  headerShown: false,
-  gestureEnabled: false,        // Disable swipe back di kiosk mode
+  headerShown:    false,
+  gestureEnabled: false,     // Disable swipe-back di kiosk mode
   animationEnabled: true,
   cardStyle: { backgroundColor: 'transparent' },
+};
+
+// Transisi ringan — slide horizontal standard
+const slideTransition = {
+  cardStyleInterpolator: ({ current, next, layouts }: any) => ({
+    cardStyle: {
+      transform: [{
+        translateX: current.progress.interpolate({
+          inputRange:  [0, 1],
+          outputRange: [layouts.screen.width, 0],
+        }),
+      }],
+    },
+    overlayStyle: {
+      opacity: current.progress.interpolate({
+        inputRange:  [0, 1],
+        outputRange: [0, 0.5],
+      }),
+    },
+  }),
 };
 
 export const AppNavigator: React.FC = () => {
@@ -41,32 +67,43 @@ export const AppNavigator: React.FC = () => {
           initialRouteName={Routes.Home}
           screenOptions={screenOptions}
         >
-          {/* ── User Flow ── */}
-          <Stack.Screen name={Routes.Home} component={HomeScreen} />
+          {/* ── User Flow ─────────────────────────────────── */}
+          <Stack.Screen
+            name={Routes.Home}
+            component={HomeScreen}
+          />
           <Stack.Screen
             name={Routes.FramePicker}
-            component={PlaceholderScreen}
-            initialParams={{ title: 'Pilih Frame 🖼️' }}
+            component={FramePickerScreen}
+            options={slideTransition}
           />
-          <Stack.Screen name={Routes.Countdown} component={CountdownScreen} />
+          <Stack.Screen
+            name={Routes.Countdown}
+            component={CountdownScreen}
+            options={slideTransition}
+          />
           <Stack.Screen
             name={Routes.Camera}
-            component={PlaceholderScreen}
-            initialParams={{ title: 'Ambil Foto 📷' }}
+            component={CameraScreen}
+            options={{ animationEnabled: false }} // No animation — langsung capture
           />
           <Stack.Screen
             name={Routes.Processing}
-            component={PlaceholderScreen}
-            initialParams={{ title: 'Memproses... ⏳' }}
+            component={ProcessingScreen}
+            options={slideTransition}
           />
           <Stack.Screen
             name={Routes.Preview}
-            component={PlaceholderScreen}
-            initialParams={{ title: 'Lihat Hasil! ✨' }}
+            component={PreviewScreen}
+            options={slideTransition}
           />
-          <Stack.Screen name={Routes.Done} component={DoneScreen} />
+          <Stack.Screen
+            name={Routes.Done}
+            component={DoneScreen}
+            options={slideTransition}
+          />
 
-          {/* ── Admin Flow ── */}
+          {/* ── Admin Flow ────────────────────────────────── */}
           <Stack.Screen
             name={Routes.AdminLogin}
             component={AdminLoginScreen as any}

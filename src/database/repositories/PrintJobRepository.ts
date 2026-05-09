@@ -105,4 +105,27 @@ export const PrintJobRepository = {
     );
     return row?.count ?? 0;
   },
+
+  async getPendingForPhoto(photoId: string): Promise<PrintJob | null> {
+    const row = await db.getFirst<Record<string, unknown>>(
+      "SELECT * FROM print_jobs WHERE photo_id = ? AND status IN ('pending','printing') LIMIT 1",
+      [photoId]
+    );
+    return row ? rowToJob(row) : null;
+  },
+
+  async resetAttempts(id: string): Promise<void> {
+    await db.run(
+      'UPDATE print_jobs SET attempts = 0, last_error = NULL, updated_at = ? WHERE id = ?',
+      [new Date().toISOString(), id]
+    );
+  },
+
+  async getAllRecent(limit = 50): Promise<PrintJob[]> {
+    const rows = await db.getAll<Record<string, unknown>>(
+      'SELECT * FROM print_jobs ORDER BY created_at DESC LIMIT ?',
+      [limit]
+    );
+    return rows.map(rowToJob);
+  },
 };

@@ -10,8 +10,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { db } from '@database/DatabaseService';
 import { AudioService } from '@services/audio/AudioService';
-import { StorageManager } from '@services/storage/StorageManager';
-import { UploadQueue } from '@services/storage/UploadQueue';
+import { StorageManager }      from '@services/storage/StorageManager';
+import { UploadQueue }          from '@services/storage/UploadQueue';
+import { MemoryCleanupService } from '@services/storage/MemoryCleanupService';
+import { PrintService }         from '@services/print/PrintService';
+import { PrintQueue }           from '@services/print/PrintQueue';
+import { WebcamService }        from '@services/camera/WebcamService';
 import { EventRepository } from '@database/repositories/EventRepository';
 import { PhotoRepository } from '@database/repositories/PhotoRepository';
 import { useAppStore } from '@store/useAppStore';
@@ -72,7 +76,7 @@ export const AppInitializer: React.FC = () => {
       setAmbienceEnabled(ambienceEnabled !== 'false'); // default true
       setKioskEnabled(kioskEnabled !== 'false');       // default true
 
-      // Step 4: Load event aktif & frame (parallel dengan audio init)
+      // Step 4: Load event aktif & frame (parallel dengan audio + services init)
       const [activeEvent, todayCount] = await Promise.all([
         EventRepository.getActive(),
         PhotoRepository.getTodayCount(),
@@ -80,6 +84,10 @@ export const AppInitializer: React.FC = () => {
         AudioService.initialize().catch(e => console.warn('[Boot] Audio init failed:', e)),
         // StorageManager init (load semua provider dari DB)
         StorageManager.initialize().catch(e => console.warn('[Boot] StorageManager init failed:', e)),
+        // Printer service init
+        PrintService.initialize().catch(e => console.warn('[Boot] PrintService init failed:', e)),
+        // Webcam init (detect USB camera)
+        WebcamService.initialize().catch(e => console.warn('[Boot] WebcamService init failed:', e)),
       ]);
 
       if (activeEvent) {
@@ -94,6 +102,8 @@ export const AppInitializer: React.FC = () => {
 
       // Step 5: Start background services
       UploadQueue.start();
+      PrintQueue.start();
+      MemoryCleanupService.start();
 
       // Step 6: Play ambience jika enabled
       if (ambienceEnabled !== 'false' && audioMuted !== 'true') {
