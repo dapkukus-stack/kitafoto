@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import type { KitaEvent } from '@types/event.types';
+import type { KitaEvent } from '@kitafoto-types/event.types';
 
 interface AdminState {
   // ── Auth ───────────────────────────────────────

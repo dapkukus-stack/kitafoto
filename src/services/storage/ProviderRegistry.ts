@@ -11,7 +11,7 @@
  */
 
 import type { IStorageProvider }    from './IStorageProvider';
-import type { StorageProviderType } from '@types/storage.types';
+import type { StorageProviderType } from '@kitafoto-types/storage.types';
 
 import { CloudinaryProvider }  from './providers/CloudinaryProvider';
 import { GoogleDriveProvider } from './providers/GoogleDriveProvider';

@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import type { KitaEvent, KitaFrame } from '@types/event.types';
+import type { KitaEvent, KitaFrame } from '@kitafoto-types/event.types';
 
 interface EventState {
   // ── Active event ───────────────────────────────

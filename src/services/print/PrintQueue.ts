@@ -24,7 +24,7 @@ import { PhotoRepository }    from '@database/repositories/PhotoRepository';
 import { PrintService }       from './PrintService';
 import { useAppStore }        from '@store/useAppStore';
 import { AppConfig }          from '@constants/config';
-import type { PrintQueueEvent } from '@types/print.types';
+import type { PrintQueueEvent } from '@kitafoto-types/print.types';
 
 // ── Retry delays per attempt number ──────────────────────────
 const RETRY_DELAYS_MS = [5_000, 10_000, 30_000, 60_000, 120_000];
@@ -146,7 +146,7 @@ class PrintQueueClass {
 
   // ── Core: Process Single Job ──────────────────────────────
 
-  private async processJob(job: import('@types/print.types').PrintJob): Promise<void> {
+  private async processJob(job: import('@kitafoto-types/print.types').PrintJob): Promise<void> {
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -213,7 +213,7 @@ class PrintQueueClass {
   }
 
   private async failJob(
-    job: import('@types/print.types').PrintJob,
+    job: import('@kitafoto-types/print.types').PrintJob,
     error: string,
     isFinal: boolean
   ): Promise<void> {

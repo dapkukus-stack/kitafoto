@@ -3,7 +3,7 @@
  */
 
 import { db } from '../DatabaseService';
-import type { KitaEvent, KitaFrame, CreateEventPayload, CreateFramePayload, UpdateEventPayload } from '@types/event.types';
+import type { KitaEvent, KitaFrame, CreateEventPayload, CreateFramePayload, UpdateEventPayload } from '@kitafoto-types/event.types';
 import 'react-native-uuid';
 import { v4 as uuidv4 } from 'react-native-uuid';
 

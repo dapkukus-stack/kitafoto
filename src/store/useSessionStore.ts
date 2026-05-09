@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { CapturedPhoto } from '@types/photo.types';
+import type { CapturedPhoto } from '@kitafoto-types/photo.types';
 import type { FilterType, LayoutType } from '@constants/config';
 
 interface SessionState {

@@ -25,7 +25,7 @@ import type {
   FolderContext,
   FolderResult,
   DeleteResult,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 
 // ═══════════════════════════════════════════════════════════════
 // CORE INTERFACE
@@ -147,6 +147,10 @@ export interface IStorageProvider {
 export abstract class BaseStorageProvider implements IStorageProvider {
   abstract readonly type: StorageProviderType;
   abstract readonly displayName: string;
+
+  // Subclass wajib implement kedua method ini
+  abstract upload(context: UploadContext, settings: ProviderSettings): Promise<UploadResult>;
+  abstract healthCheck(): Promise<HealthCheckResult>;
 
   protected config: StorageProviderConfig | null = null;
   protected settings: ProviderSettings = {};

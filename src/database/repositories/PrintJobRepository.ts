@@ -3,7 +3,7 @@
  */
 
 import { db } from '../DatabaseService';
-import type { PrintJob, CreatePrintJobPayload } from '@types/print.types';
+import type { PrintJob, CreatePrintJobPayload } from '@kitafoto-types/print.types';
 import { v4 as uuidv4 } from 'react-native-uuid';
 
 function rowToJob(row: Record<string, unknown>): PrintJob {

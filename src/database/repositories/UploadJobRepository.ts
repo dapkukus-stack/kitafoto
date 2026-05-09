@@ -12,7 +12,7 @@ import type {
   UploadJob,
   UploadJobStatus,
   UploadErrorCode,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 import { v4 as uuidv4 } from 'react-native-uuid';
 import { AppConfig }    from '@constants/config';
 

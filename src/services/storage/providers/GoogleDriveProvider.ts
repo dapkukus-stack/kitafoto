@@ -57,7 +57,7 @@ import type {
   OAuthTokens,
   OAuthRefreshResult,
   UploadErrorCode,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 
 // ── Google Drive API Constants ───────────────────────────────
 

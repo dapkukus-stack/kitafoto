@@ -29,7 +29,7 @@ import { useSessionStore }    from '@store/useSessionStore';
 import { useEventStore }      from '@store/useEventStore';
 import { v4 as uuidv4 }       from 'react-native-uuid';
 import type { LayoutType, FilterType } from '@constants/config';
-import type { CapturedPhoto }          from '@types/photo.types';
+import type { CapturedPhoto }          from '@kitafoto-types/photo.types';
 
 // ── Output directory (permanent, bukan cache) ─────────────────
 const PHOTO_DIR = `${FileSystem.documentDirectory}kitafoto/photos/`;

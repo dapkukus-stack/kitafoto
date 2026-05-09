@@ -24,8 +24,8 @@ import type {
   CameraSourceType,
   CameraDiagnostics,
   CameraConfig,
-} from '@types/camera.types';
-import { DEFAULT_CAMERA_CONFIG } from '@types/camera.types';
+} from '@kitafoto-types/camera.types';
+import { DEFAULT_CAMERA_CONFIG } from '@kitafoto-types/camera.types';
 
 // VisionCamera — import akan resolve saat runtime di device nyata
 // Di environment ini kita buat abstraction layer yang bisa di-mock

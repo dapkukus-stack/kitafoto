@@ -18,7 +18,7 @@ module.exports = function (api) {
             '@hooks': './src/hooks',
             '@database': './src/database',
             '@constants': './src/constants',
-            '@types': './src/types',
+            '@kitafoto-types': './src/types',
             '@utils': './src/utils',
             '@assets': './assets',
             '@responsive': './src/responsive/index.ts',

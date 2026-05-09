@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { CameraStatus } from '@types/camera.types';
+import type { CameraStatus } from '@kitafoto-types/camera.types';
 
 interface AppState {
   // ── Init ───────────────────────────────────────

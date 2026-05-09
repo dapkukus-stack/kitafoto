@@ -1,26 +1,59 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    /* ─── Language & Environment ─────────────────────────── */
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-native",
+    "useDefineForClassFields": true,
+
+    /* ─── Module Resolution ──────────────────────────────── */
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* ─── Type Checking ──────────────────────────────────── */
     "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "exactOptionalPropertyTypes": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+
+    /* ─── Emit (type-check only, no output) ─────────────── */
+    "noEmit": true,
+    "isolatedModules": true,
+
+    /* ─── Path Aliases ───────────────────────────────────── */
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@components/*": ["src/components/*"],
-      "@screens/*": ["src/screens/*"],
-      "@store/*": ["src/store/*"],
-      "@services/*": ["src/services/*"],
-      "@hooks/*": ["src/hooks/*"],
-      "@database/*": ["src/database/*"],
-      "@constants/*": ["src/constants/*"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"],
-      "@assets/*": ["assets/*"],
-      "@responsive": ["src/responsive/index.ts"],
-      "@responsive/*": ["src/responsive/*"]
-    },
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "exactOptionalPropertyTypes": false
+      "@/*":                  ["src/*"],
+      "@components/*":        ["src/components/*"],
+      "@screens/*":           ["src/screens/*"],
+      "@store/*":             ["src/store/*"],
+      "@services/*":          ["src/services/*"],
+      "@hooks/*":             ["src/hooks/*"],
+      "@database/*":          ["src/database/*"],
+      "@constants/*":         ["src/constants/*"],
+      "@kitafoto-types/*":    ["src/types/*"],
+      "@utils/*":             ["src/utils/*"],
+      "@assets/*":            ["assets/*"],
+      "@responsive":          ["src/responsive/index.ts"],
+      "@responsive/*":        ["src/responsive/*"],
+      "@navigation/*":        ["src/navigation/*"]
+    }
   },
-  "include": ["src", "index.js", "app.json"]
+  "include": [
+    "src/**/*",
+    "index.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios",
+    "dist",
+    "build"
+  ]
 }

@@ -33,7 +33,7 @@ import type {
   FolderContext,
   DeleteResult,
   UploadErrorCode,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 
 // ── Firebase Storage REST endpoints ──────────────────────────
 
@@ -130,7 +130,7 @@ export class FirebaseProvider extends BaseStorageProvider {
       // Baca file
       const { readAsStringAsync, EncodingType } = await import('expo-file-system');
       const base64 = await readAsStringAsync(localUri, { encoding: EncodingType.Base64 });
-      const binary = Buffer.from(base64, 'base64');
+      const binary: BodyInit = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), settings.timeoutMs ?? 60_000);

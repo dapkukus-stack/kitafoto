@@ -22,3 +22,4 @@ yarn-debug.*
 yarn-error.*
 .DS_Store
 *.orig.*
+.tooling-test/

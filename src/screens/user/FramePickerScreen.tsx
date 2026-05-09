@@ -56,7 +56,7 @@ import { useSessionStore }         from '@store/useSessionStore';
 import { useEventStore }           from '@store/useEventStore';
 import { FrameRepository }         from '@database/repositories/EventRepository';
 import { useTokens, useResponsive, calcGridItem, makeGetItemLayout } from '@responsive';
-import type { KitaFrame }          from '@types/event.types';
+import type { KitaFrame }          from '@kitafoto-types/event.types';
 
 const IDLE_TIMEOUT_MS = AppConfig.framepickerTimeoutMs;
 const CARD_ASPECT     = 1.4; // height = width × 1.4

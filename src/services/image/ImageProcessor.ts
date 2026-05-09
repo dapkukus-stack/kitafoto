@@ -8,7 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { AppConfig } from '@constants/config';
 import type { FilterType, LayoutType } from '@constants/config';
-import type { CapturedPhoto } from '@types/photo.types';
+import type { CapturedPhoto } from '@kitafoto-types/photo.types';
 
 const PHOTO_DIR = `${FileSystem.documentDirectory}kitafoto/photos/`;
 const SESSION_CACHE_DIR = `${FileSystem.cacheDirectory}kitafoto/sessions/`;

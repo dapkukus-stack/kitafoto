@@ -71,31 +71,34 @@ export const KitaButton: React.FC<KitaButtonProps> = ({
   const vc     = VARIANT_COLORS[variant];
 
   // ── Touch target height from tokens ───────────────────────────
-  const height: number = {
+  const heightMap: Record<ButtonSizeKey, number> = {
     hero:  T.touch.heroBtn,
     large: T.touch.largeBtn,
     small: T.touch.smallBtn,
     admin: T.touch.adminBtn,
-  }[size];
+  };
+  const height: number = heightMap[size];
 
   // ── Font size from tokens ─────────────────────────────────────
-  const fontSize: number = {
+  const fontMap: Record<ButtonSizeKey, number> = {
     hero:  T.font.bigButton,
     large: T.font.medButton,
     small: T.font.label,
     admin: T.font.adminButton,
-  }[size];
+  };
+  const fontSize: number = fontMap[size];
 
   // ── Horizontal padding proportional to height ─────────────────
   const paddingH = Math.round(height * 0.45);
 
   // ── Min width — percentage of hero button height ──────────────
-  const minWidth: number | undefined = fullWidth ? undefined : {
+  const minWidthMap: Record<ButtonSizeKey, number> = {
     hero:  Math.round(T.touch.heroBtn  * 3.2),
     large: Math.round(T.touch.largeBtn * 3.0),
     small: Math.round(T.touch.smallBtn * 2.2),
     admin: Math.round(T.touch.adminBtn * 2.5),
-  }[size];
+  };
+  const minWidth: number | undefined = fullWidth ? undefined : minWidthMap[size];
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

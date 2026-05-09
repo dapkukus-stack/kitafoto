@@ -3,7 +3,7 @@
  */
 
 import { db } from '../DatabaseService';
-import type { KitaPhoto, CreatePhotoPayload } from '@types/photo.types';
+import type { KitaPhoto, CreatePhotoPayload } from '@kitafoto-types/photo.types';
 import { v4 as uuidv4 } from 'react-native-uuid';
 
 function rowToPhoto(row: Record<string, unknown>): KitaPhoto {

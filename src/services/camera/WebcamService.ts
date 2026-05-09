@@ -24,7 +24,7 @@ import type {
   CaptureOptions,
   CaptureErrorCode,
   CameraDevice,
-} from '@types/camera.types';
+} from '@kitafoto-types/camera.types';
 
 // ── Session temp directory ────────────────────────────────────
 export const SESSION_DIR = `${FileSystem.cacheDirectory}kitafoto/sessions/`;

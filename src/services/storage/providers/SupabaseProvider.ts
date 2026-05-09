@@ -35,7 +35,7 @@ import type {
   FolderResult,
   DeleteResult,
   UploadErrorCode,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 
 // ── Supabase Storage API Response ────────────────────────────
 
@@ -121,7 +121,7 @@ export class SupabaseProvider extends BaseStorageProvider {
             'Content-Type': 'image/jpeg',
             'x-upsert': 'true', // Overwrite jika ada file dengan nama sama
           },
-          body: Buffer.from(base64, 'base64'),
+          body: Uint8Array.from(atob(base64), c => c.charCodeAt(0)) as BodyInit,
           signal: controller.signal,
         });
       } finally {

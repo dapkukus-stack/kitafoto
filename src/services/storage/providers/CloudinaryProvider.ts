@@ -23,7 +23,7 @@ import type {
   HealthCheckResult,
   DeleteResult,
   UploadErrorCode,
-} from '@types/storage.types';
+} from '@kitafoto-types/storage.types';
 import { AppConfig } from '@constants/config';
 
 // ── Cloudinary API Response ──────────────────────────────────

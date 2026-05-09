@@ -48,7 +48,7 @@ export const CameraScreen: React.FC = () => {
   const T  = useTokens();
   const rs = useResponsive();
 
-  const cameraRef      = useRef<VisionCameraRef>(null);
+  const cameraRef      = useRef<VisionCameraRef | null>(null);
   const hasCapturedRef = useRef(false);
   const appStateRef    = useRef<AppStateStatus>('active');
 
@@ -65,8 +65,8 @@ export const CameraScreen: React.FC = () => {
     WebcamService.setCameraRef(cameraRef);
 
     const timer = setTimeout(() => setIsCameraReady(true), CAMERA_READY_DELAY_MS);
-    const sub   = AppState.addEventListener('change', (s: AppStateStatus) => {
-      appStateRef.current = s;
+    const sub   = AppState.addEventListener('change', (s: string) => {
+      appStateRef.current = s as AppStateStatus;
     });
 
     return () => {
@@ -206,7 +206,7 @@ export const CameraScreen: React.FC = () => {
 
 interface CameraPreviewProps {
   cameraRef: React.RefObject<VisionCameraRef>;
-  device:    import('@types/camera.types').CameraDevice;
+  device:    import('@kitafoto-types/camera.types').CameraDevice;
   isActive:  boolean;
 }
 

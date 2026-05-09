@@ -23,7 +23,8 @@ export function useAdminGesture({
   const { incrementLogoTap, resetLogoTap } = useAdminStore();
 
   const handleTap = useCallback(() => {
-    tapCountRef.current += 1;
+    if (tapCountRef.current === null) tapCountRef.current = 0;
+    tapCountRef.current = (tapCountRef.current ?? 0) + 1;
     incrementLogoTap();
 
     // Reset timer setiap tap
@@ -32,7 +33,7 @@ export function useAdminGesture({
     }
 
     // Jika sudah cukup tap → trigger
-    if (tapCountRef.current >= tapCount) {
+    if ((tapCountRef.current ?? 0) >= tapCount) {
       tapCountRef.current = 0;
       resetLogoTap();
       if (timerRef.current) clearTimeout(timerRef.current);

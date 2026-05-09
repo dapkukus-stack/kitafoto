@@ -37,7 +37,7 @@ import type {
   PrintErrorCode,
   PrinterStatus,
   PrinterConfig,
-} from '@types/print.types';
+} from '@kitafoto-types/print.types';
 import type { PrinterType } from '@constants/config';
 
 // ── Print timeout ─────────────────────────────────────────────
@@ -167,7 +167,7 @@ class PrintServiceClass {
 
       // ── Pilih print path ─────────────────────────────────
       if (this.config.type === 'wifi' && this.config.ip) {
-        result = await this.printViaIPP(filePath, copies);
+        result = await this.printViaIPPDirect(filePath, copies);
       } else if (this.config.type === 'usb') {
         result = await this.printViaRawBT(filePath, copies);
       } else {
