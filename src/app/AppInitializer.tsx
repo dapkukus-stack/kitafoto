@@ -2,9 +2,11 @@
  * AppInitializer
  * Boot sequence KitaFoto — dijalankan sekali saat startup
  * Target: selesai < 2 detik
+ *
+ * v2: + ErrorBoundary, DiagnosticsService, PerformanceMonitor, DebugOverlay
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
@@ -16,12 +18,16 @@ import { MemoryCleanupService } from '@services/storage/MemoryCleanupService';
 import { PrintService }         from '@services/print/PrintService';
 import { PrintQueue }           from '@services/print/PrintQueue';
 import { WebcamService }        from '@services/camera/WebcamService';
+import { DiagnosticsService }   from '@services/diagnostics/DiagnosticsService';
+import { PerformanceMonitor }   from '@services/diagnostics/PerformanceMonitor';
 import { EventRepository } from '@database/repositories/EventRepository';
 import { PhotoRepository } from '@database/repositories/PhotoRepository';
 import { useAppStore } from '@store/useAppStore';
 import { useEventStore } from '@store/useEventStore';
 import { Colors } from '@constants/colors';
 import { AppNavigator } from '@navigation/AppNavigator';
+import { ErrorBoundary } from '@components/common/ErrorBoundary';
+import { DebugOverlay } from '@components/common/DebugOverlay';
 
 // Jaga splash screen tetap tampil saat boot
 SplashScreen.preventAutoHideAsync();
@@ -36,9 +42,18 @@ async function loadFonts(): Promise<void> {
   });
 }
 
+// ── Debug overlay activation: tap version label 10x ──────────
+const DEBUG_TAP_COUNT    = 10;
+const DEBUG_TAP_TIMEOUT  = 4000; // ms
+
 export const AppInitializer: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugVisible, setDebugVisible] = useState(false);
+
+  // Debug overlay tap counter
+  const [debugTaps, setDebugTaps] = useState(0);
+  const debugTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     setInitialized,
@@ -61,6 +76,10 @@ export const AppInitializer: React.FC = () => {
       // Step 2: Init database
       await db.initialize();
 
+      // Step 2.5: Init diagnostics (depends on DB)
+      await DiagnosticsService.initialize();
+      DiagnosticsService.info('system', 'Boot sequence started');
+
       // Step 3: Load settings dari DB
       const [
         audioMuted,
@@ -81,13 +100,21 @@ export const AppInitializer: React.FC = () => {
         EventRepository.getActive(),
         PhotoRepository.getTodayCount(),
         // Audio init background — non-blocking
-        AudioService.initialize().catch(e => console.warn('[Boot] Audio init failed:', e)),
+        AudioService.initialize().catch(e => {
+          DiagnosticsService.warn('system', 'Audio init failed', { error: String(e) });
+        }),
         // StorageManager init (load semua provider dari DB)
-        StorageManager.initialize().catch(e => console.warn('[Boot] StorageManager init failed:', e)),
+        StorageManager.initialize().catch(e => {
+          DiagnosticsService.warn('system', 'StorageManager init failed', { error: String(e) });
+        }),
         // Printer service init
-        PrintService.initialize().catch(e => console.warn('[Boot] PrintService init failed:', e)),
+        PrintService.initialize().catch(e => {
+          DiagnosticsService.warn('system', 'PrintService init failed', { error: String(e) });
+        }),
         // Webcam init (detect USB camera)
-        WebcamService.initialize().catch(e => console.warn('[Boot] WebcamService init failed:', e)),
+        WebcamService.initialize().catch(e => {
+          DiagnosticsService.warn('system', 'WebcamService init failed', { error: String(e) });
+        }),
       ]);
 
       if (activeEvent) {
@@ -104,6 +131,7 @@ export const AppInitializer: React.FC = () => {
       UploadQueue.start();
       PrintQueue.start();
       MemoryCleanupService.start();
+      PerformanceMonitor.start();
 
       // Step 6: Play ambience jika enabled
       if (ambienceEnabled !== 'false' && audioMuted !== 'true') {
@@ -116,15 +144,37 @@ export const AppInitializer: React.FC = () => {
       // Sembunyikan splash screen
       await SplashScreen.hideAsync();
 
-      console.log('[Boot] KitaFoto ready! ✓');
+      DiagnosticsService.info('system', 'Boot sequence complete', {
+        activeEvent: activeEvent?.name ?? 'none',
+        todayCount,
+      });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Terjadi kesalahan saat startup';
-      console.error('[Boot] Error:', msg);
+      DiagnosticsService.fatal('system', `Boot failed: ${msg}`);
       setError(msg);
       await SplashScreen.hideAsync();
     }
   };
+
+  // ── Debug overlay activation ───────────────────────────────
+
+  const handleDebugTap = useCallback(() => {
+    setDebugTaps(prev => {
+      const next = prev + 1;
+      if (next >= DEBUG_TAP_COUNT) {
+        setDebugVisible(v => !v); // Toggle
+        return 0;
+      }
+      return next;
+    });
+
+    // Reset counter after timeout
+    if (debugTimerRef.current) clearTimeout(debugTimerRef.current);
+    debugTimerRef.current = setTimeout(() => setDebugTaps(0), DEBUG_TAP_TIMEOUT);
+  }, []);
+
+  // ── Render: Error state ────────────────────────────────────
 
   if (error) {
     return (
@@ -137,17 +187,29 @@ export const AppInitializer: React.FC = () => {
     );
   }
 
+  // ── Render: Loading state ──────────────────────────────────
+
   if (!isReady) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingLogo}>KitaFoto</Text>
+        <Text style={styles.loadingLogo} onPress={handleDebugTap}>KitaFoto</Text>
         <ActivityIndicator color={Colors.primary} size="large" />
         <Text style={styles.loadingText}>Memuat aplikasi...</Text>
       </View>
     );
   }
 
-  return <AppNavigator />;
+  // ── Render: App ready ──────────────────────────────────────
+
+  return (
+    <ErrorBoundary>
+      <AppNavigator />
+      <DebugOverlay
+        visible={debugVisible}
+        onClose={() => setDebugVisible(false)}
+      />
+    </ErrorBoundary>
+  );
 };
 
 const styles = StyleSheet.create({
