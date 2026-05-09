@@ -4,18 +4,24 @@
   "main": "index.js",
 
   "scripts": {
-    "start":          "expo start",
-    "android":        "expo run:android",
-    "build:android":  "eas build --platform android",
-    "build:apk":      "eas build --platform android --profile preview",
+    "start":            "expo start",
+    "android":          "expo run:android",
 
-    "type-check":     "tsc --noEmit",
-    "lint":           "eslint babel.config.js eslint.config.js",
-    "lint:fix":       "eslint babel.config.js eslint.config.js --fix",
+    "build:android":    "eas build --platform android --profile production",
+    "build:apk":        "eas build --platform android --profile apk",
+    "build:preview":    "eas build --platform android --profile preview",
+    "build:dev":        "eas build --platform android --profile development",
+    "build:local":      "npx expo prebuild --platform android && cd android && ./gradlew assembleRelease",
 
-    "check":          "npm run type-check && npm run lint",
-    "clean":          "rm -rf node_modules .expo dist android/build ios/build",
-    "prebuild":       "expo prebuild --clean"
+    "type-check":       "tsc --noEmit",
+    "lint":             "eslint babel.config.js eslint.config.js",
+    "lint:fix":         "eslint babel.config.js eslint.config.js --fix",
+    "check":            "npm run type-check && npm run lint",
+
+    "prebuild":         "expo prebuild --platform android --clean",
+    "clean":            "rm -rf node_modules .expo dist android/build ios/build android/app/build",
+    "clean:android":    "cd android && ./gradlew clean",
+    "postinstall":      "expo doctor || true"
   },
 
   "dependencies": {
