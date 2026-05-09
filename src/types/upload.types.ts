@@ -1,30 +1,22 @@
-export type UploadJobStatus = 'pending' | 'uploading' | 'done' | 'failed';
+/**
+ * upload.types.ts — Re-export bridge untuk backward compatibility
+ * ─────────────────────────────────────────────────────────────
+ * Tipe-tipe upload sekarang ada di storage.types.ts.
+ * File ini di-keep agar import lama di codebase tidak perlu diubah.
+ *
+ * Untuk kode baru, langsung import dari '@types/storage.types'.
+ */
 
-export interface UploadJob {
-  id: string;
-  photoId: string;
-  status: UploadJobStatus;
-  attempts: number;
-  maxAttempts: number;
-  nextRetryAt?: string;     // ISO timestamp untuk exponential backoff
-  lastError?: string;
-  createdAt: string;
-  updatedAt: string;
-  uploadedAt?: string;
-  cloudUrl?: string;
-}
+// Re-export semua yang relevan dari storage.types
+export type {
+  UploadJobStatus,
+  UploadJob,
+  UploadResult,
+  UploadContext,
+  UploadErrorCode,
+  CreateUploadJobPayload,
+  UploadHistoryEntry,
+} from './storage.types';
 
-export interface CloudinaryConfig {
-  cloudName: string;
-  uploadPreset: string;
-  rootFolder: string;
-}
-
-export interface UploadResult {
-  success: boolean;
-  cloudUrl?: string;
-  publicId?: string;
-  error?: string;
-}
-
-export type CreateUploadJobPayload = Omit<UploadJob, 'id' | 'createdAt' | 'updatedAt'>;
+// Legacy type alias — dipertahankan agar file lama tidak error
+export type { CloudinaryCredentials } from './storage.types';

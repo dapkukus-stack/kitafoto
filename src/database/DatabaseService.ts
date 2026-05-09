@@ -5,7 +5,7 @@
  */
 
 import * as SQLite from 'expo-sqlite';
-import { CREATE_TABLES_SQL, DEFAULT_SETTINGS } from './schema';
+import { CREATE_TABLES_SQL, DEFAULT_SETTINGS, MIGRATION_V1_TO_V2 } from './schema';
 
 class DatabaseService {
   private static instance: DatabaseService;
@@ -25,7 +25,7 @@ class DatabaseService {
     try {
       this.db = await SQLite.openDatabaseAsync('kitafoto.db');
 
-      // Jalankan semua create table (split per statement)
+      // Jalankan CREATE TABLE (idempotent — IF NOT EXISTS)
       const statements = CREATE_TABLES_SQL
         .split(';')
         .map((s) => s.trim())
@@ -38,11 +38,44 @@ class DatabaseService {
       // Insert default settings jika belum ada
       await this.seedDefaultSettings();
 
+      // Jalankan migrasi schema jika diperlukan
+      await this.runMigrations();
+
       this.initialized = true;
       console.log('[DB] KitaFoto database initialized ✓');
     } catch (error) {
       console.error('[DB] Initialization failed:', error);
       throw error;
+    }
+  }
+
+  private async runMigrations(): Promise<void> {
+    if (!this.db) return;
+
+    const versionRow = await this.db.getFirstAsync<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = 'db_schema_version'"
+    );
+    const currentVersion = parseInt(versionRow?.value ?? '1', 10);
+
+    if (currentVersion < 2) {
+      console.log('[DB] Running migration v1 → v2...');
+      try {
+        const migStmts = MIGRATION_V1_TO_V2
+          .split(';')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        for (const sql of migStmts) {
+          try {
+            await this.db.runAsync(sql);
+          } catch (e) {
+            // ALTER TABLE ADD COLUMN IF NOT EXISTS bisa gagal jika kolom sudah ada — ok
+            console.warn('[DB] Migration step skipped:', (e as Error).message?.substring(0, 80));
+          }
+        }
+        console.log('[DB] Migration v1 → v2 complete ✓');
+      } catch (error) {
+        console.error('[DB] Migration error:', error);
+      }
     }
   }
 

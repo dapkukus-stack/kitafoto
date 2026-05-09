@@ -24,9 +24,13 @@ export function useNetworkStatus() {
 
       setOnline(online);
 
-      // Jika baru kembali online → log (service lain subscribe ke store)
+      // Jika baru kembali online → trigger upload queue
       if (online && previouslyOffline) {
         console.log('[Network] Internet kembali! Trigger upload queue.');
+        // Import dinamis agar tidak circular dependency
+        import('@services/storage/UploadQueue')
+          .then(({ UploadQueue }) => UploadQueue.triggerNow())
+          .catch(() => {});
       }
     } catch {
       setOnline(false);

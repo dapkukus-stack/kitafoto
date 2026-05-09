@@ -819,3 +819,229 @@ FEATURE_AI_STYLE=false
 
 *KitaFoto Blueprint v1.0.0 — Generated for Samsung Galaxy Tab A9*
 *Stack: React Native (Expo Bare) + TypeScript + Zustand + SQLite + Cloudinary*
+
+
+---
+
+## 11. ☁️ Modular Cloud Storage Architecture (v2)
+
+> Diperbarui di Phase 2. Menggantikan arsitektur Cloudinary-only di v1.
+
+### 11.1 Desain Filosofi
+
+```
+PRINSIP:
+  Provider-Agnostic  → kode bisnis tidak tahu provider apa yang dipakai
+  Open/Closed        → tambah provider baru tanpa ubah kode yang ada
+  Fail-Safe          → upload tetap berjalan meski primary provider down
+  Offline-First      → semua upload persistent di SQLite, tidak hilang saat crash
+  Lightweight        → lazy loading provider, hemat RAM di Tab A9
+```
+
+### 11.2 Layer Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   APPLICATION LAYER                       │
+│   PhotoSession → enqueue(photoId) → UploadQueue          │
+└─────────────────────────┬────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────┐
+│              UPLOAD QUEUE (universal)                     │
+│  • Persistent di SQLite (survive crash)                   │
+│  • Exponential backoff retry                              │
+│  • Pause/resume saat offline                              │
+│  • Max 3 concurrent (throttled)                           │
+│  • FIFO + priority queue                                  │
+│  • Event listener untuk UI real-time                      │
+└─────────────────────────┬────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────┐
+│              STORAGE MANAGER (orchestrator)               │
+│  • Pilih primary provider                                 │
+│  • Auto failover ke backup jika primary down              │
+│  • Health monitoring semua provider (5 menit interval)    │
+│  • Upload history logging (analytics)                     │
+│  • Credential encryption/decryption                       │
+│  • Provider switching tanpa restart app                   │
+└──────┬──────────┬──────────┬───────────┬─────────────────┘
+       ↓          ↓          ↓           ↓
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐
+│Cloudinary│ │ Google   │ │Firebase  │ │ Supabase         │
+│Provider  │ │ Drive    │ │ Storage  │ │ Storage          │
+│          │ │ Provider │ │ (Phase2) │ │ (Phase2)         │
+│✓ Prod    │ │✓ Prod    │ │⚡ Skeleton│ │⚡ Skeleton        │
+└──────────┘ └──────────┘ └──────────┘ └──────────────────┘
+       ↑ semua implement IStorageProvider ↑
+```
+
+### 11.3 IStorageProvider Interface
+
+```typescript
+interface IStorageProvider {
+  // Identity
+  readonly type: StorageProviderType;
+  readonly displayName: string;
+
+  // Lifecycle
+  initialize(config: StorageProviderConfig): Promise<boolean>;
+  isConfigured(): boolean;
+  isReady(): boolean;
+  reloadConfig(config): Promise<void>;
+
+  // Upload
+  upload(context: UploadContext, settings: ProviderSettings): Promise<UploadResult>;
+  uploadWithProgress?(context, settings, onProgress): Promise<UploadResult>;  // opsional
+
+  // Folder management
+  createFolder(context: FolderContext, settings): Promise<FolderResult>;
+  folderExists?(folderId: string): Promise<boolean>;  // opsional
+
+  // File operations
+  deleteFile(remoteId: string): Promise<DeleteResult>;
+  getPublicUrl?(remoteId: string): Promise<string | null>;  // opsional
+
+  // Health & monitoring
+  healthCheck(): Promise<HealthCheckResult>;
+
+  // Auth (OAuth providers)
+  refreshAuth?(): Promise<{ success: boolean; error?: string }>;
+  isAuthExpired?(): boolean;
+
+  // Config
+  validateCredentials(credentials): Promise<string | null>;
+}
+```
+
+### 11.4 Provider Support Matrix
+
+| Feature              | Cloudinary | Google Drive | Firebase | Supabase |
+|----------------------|:----------:|:------------:|:--------:|:--------:|
+| Auto folder          | ✅          | ✅            | ✅        | ✅        |
+| Public URL           | ✅          | ✅            | ✅        | ✅        |
+| Signed URL           | ⚠️ (paid)  | ✅            | ✅        | ✅        |
+| Delete file          | ⚠️ (signed)| ✅            | ✅        | ✅        |
+| Quota check          | ✅          | ✅            | ❌        | ❌        |
+| Resumable upload     | ❌          | ✅ (Phase 2)  | ✅ (P2)  | ✅ (P2)  |
+| AI transform         | ✅          | ❌            | ❌        | ❌        |
+| OAuth required       | ❌          | ✅            | ❌        | ❌        |
+| Free tier (storage)  | 25GB        | 15GB         | 5GB      | 1GB      |
+| Production ready     | ✅          | ✅            | Phase 2  | Phase 2  |
+
+### 11.5 Database Tables (v2)
+
+```
+storage_providers    → konfigurasi provider (bisa banyak)
+upload_queue         → antrian upload universal (ganti upload_jobs)
+upload_history       → log setiap percobaan upload
+provider_health_logs → log health check berkala
+```
+
+### 11.6 Google Drive — OAuth Strategy untuk Kiosk
+
+```
+PILIHAN TERBAIK untuk Samsung Tab A9 Kiosk:
+
+┌─────────────────────────────────────────────────────────┐
+│  OPSI A: Device Authorization Grant (RFC 8628)          │
+│  ─────────────────────────────────────────────────────  │
+│  1. App tampilkan kode pendek di layar (mis: "XYZ-123") │
+│  2. Admin buka https://google.com/device di HP/laptop   │
+│  3. Masukkan kode pendek                                │
+│  4. Approve permission di browser                       │
+│  5. Tablet polling Google → dapat token otomatis        │
+│                                                         │
+│  + Tidak butuh browser di tablet                        │
+│  + Cocok untuk kiosk/TV/IoT                             │
+│  + Standar RFC resmi Google                             │
+│  - Butuh Client ID dari Google Console                  │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  OPSI B: Service Account (RECOMMENDED untuk production) │
+│  ─────────────────────────────────────────────────────  │
+│  1. Buat Service Account di Google Cloud Console        │
+│  2. Download JSON key file                              │
+│  3. Share folder Drive ke email service account         │
+│  4. App sign JWT dengan private key → dapat token       │
+│                                                         │
+│  + Token tidak expire (bisa auto-renew)                 │
+│  + Tidak butuh interaksi user sama sekali               │
+│  + Paling stabil untuk kiosk app                        │
+│  - Setup lebih teknis                                   │
+│  - Butuh simpan private key di device (aman di kiosk)   │
+└─────────────────────────────────────────────────────────┘
+
+IMPLEMENTASI SEKARANG: Opsi A (Device Auth Grant)
+ROADMAP: Opsi B via JWT signing di Phase 3
+```
+
+### 11.7 Token Security & Credential Storage
+
+```
+CURRENT (Phase 1):
+  Credentials → XOR obfuscation + Base64 → SQLite
+  Cukup untuk mencegah casual tampering
+
+PHASE 2 (Production hardening):
+  Credentials → expo-secure-store (Android Keystore)
+  Access token → react-native-keychain
+  Refresh token → Android Keystore (hardware-backed)
+
+RULES:
+  ✗ JANGAN hardcode credential di source code
+  ✗ JANGAN commit .env dengan nilai asli ke git
+  ✗ JANGAN simpan API secret di client-side
+  ✓ Gunakan unsigned upload preset (Cloudinary)
+  ✓ Gunakan anon key saja (Supabase)
+  ✓ Refresh token auto-renew via StorageManager
+```
+
+### 11.8 Cara Tambah Provider Baru
+
+```typescript
+// 1. Buat file: src/services/storage/providers/MyProvider.ts
+export class MyProvider extends BaseStorageProvider {
+  readonly type: StorageProviderType = 'my_provider';  // tambah ke union type
+  readonly displayName = 'My Provider';
+
+  protected async onInitialize(config): Promise<void> { /* ... */ }
+  async upload(context, settings): Promise<UploadResult> { /* ... */ }
+  async healthCheck(): Promise<HealthCheckResult> { /* ... */ }
+}
+
+// 2. Register di ProviderRegistry.ts (tambah 1 baris)
+this.register('my_provider', MyProvider, { /* metadata */ });
+
+// 3. Tambah type ke StorageProviderType di storage.types.ts
+// 4. Done — admin panel otomatis tampilkan provider baru
+```
+
+### 11.9 Upload Flow (End-to-End)
+
+```
+PhotoSession selesai
+    ↓
+UploadQueue.enqueue(photoId)   → simpan ke SQLite upload_queue
+    ↓ (background, non-blocking)
+UploadQueue.tick() setiap 5 detik
+    ↓ jika online & ada job pending
+StorageManager.upload(context)
+    ↓ pilih primary provider
+CloudinaryProvider.upload()   ← atau GoogleDriveProvider, dll.
+    ↓ sukses
+PhotoRepository.updateUploadStatus('done', cloudUrl)
+UploadQueue.markJobDone()
+upload_history INSERT (analytics)
+Cleanup file lokal
+    ↓ gagal (provider down)
+StorageManager auto failover ke backup provider
+    ↓ backup juga gagal
+UploadQueue.markJobFailed() + exponential backoff
+    ↓ retry otomatis saat internet/provider kembali
+```
+
+---
+
+*Cloud Storage Architecture v2.0 — Provider-Agnostic, Modular, Future-Proof*
+*Stack: IStorageProvider + ProviderRegistry + StorageManager + UploadQueue*

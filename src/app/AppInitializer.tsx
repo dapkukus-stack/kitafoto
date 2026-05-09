@@ -10,8 +10,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { db } from '@database/DatabaseService';
 import { AudioService } from '@services/audio/AudioService';
-import { CloudinaryService } from '@services/cloud/CloudinaryService';
-import { UploadQueue } from '@services/cloud/UploadQueue';
+import { StorageManager } from '@services/storage/StorageManager';
+import { UploadQueue } from '@services/storage/UploadQueue';
 import { EventRepository } from '@database/repositories/EventRepository';
 import { PhotoRepository } from '@database/repositories/PhotoRepository';
 import { useAppStore } from '@store/useAppStore';
@@ -78,8 +78,8 @@ export const AppInitializer: React.FC = () => {
         PhotoRepository.getTodayCount(),
         // Audio init background — non-blocking
         AudioService.initialize().catch(e => console.warn('[Boot] Audio init failed:', e)),
-        // Cloudinary config reload
-        CloudinaryService.initialize().catch(e => console.warn('[Boot] Cloudinary init failed:', e)),
+        // StorageManager init (load semua provider dari DB)
+        StorageManager.initialize().catch(e => console.warn('[Boot] StorageManager init failed:', e)),
       ]);
 
       if (activeEvent) {
