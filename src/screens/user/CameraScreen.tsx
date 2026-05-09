@@ -1,135 +1,105 @@
 /**
- * CameraScreen — Live preview + capture
+ * CameraScreen — Responsive & Orientation-aware v2
  * ─────────────────────────────────────────────────────────────
- * Memory-safe design:
- *   • Camera hanya aktif saat screen ini mounted
- *   • Camera ref di-release saat unmount
- *   • Tidak ada state besar di React state (pakai refs)
- *   • Flash overlay via Animated (UI thread, tidak block JS)
- *   • Tidak re-render saat capture berlangsung
+ * Layout modes:
+ *   Phone portrait    → fullscreen camera, counter badge atas
+ *   Phone landscape   → fullscreen camera, counter badge kiri
+ *   Tablet portrait   → fullscreen camera, counter badge atas
+ *   Tablet landscape  → camera 70% lebar + panel kontrol kanan 30%
  *
- * Flow:
- *   CountdownScreen → replace → CameraScreen (capture) →
- *   jika masih ada foto → replace → CountdownScreen
- *   jika selesai semua → replace → ProcessingScreen
+ * Memory-safe:
+ *   • cameraRef di useRef (bukan state)
+ *   • hasCapturedRef guard — tidak mungkin double capture
+ *   • Camera unmount = releaseCameraRef() → no memory leak
+ *   • VisionCamera lazy-loaded — tidak block startup
  */
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, {
+  useEffect, useRef, useCallback, useState, useMemo,
+} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  AppState,
-  type AppStateStatus,
+  View, Text, StyleSheet, AppState, type AppStateStatus,
 } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
-  runOnJS,
+  useSharedValue, useAnimatedStyle,
+  withSequence, withTiming, runOnJS,
 } from 'react-native-reanimated';
-import { useNavigation } from '@react-navigation/native';
-import { Colors } from '@constants/colors';
-import { UserTypography } from '@constants/typography';
-import { Routes } from '@constants/routes';
-import { useSessionStore } from '@store/useSessionStore';
-import { useAppStore } from '@store/useAppStore';
-import { WebcamService } from '@services/camera/WebcamService';
-import { AudioService } from '@services/audio/AudioService';
-import { AppConfig } from '@constants/config';
-import { Mascot } from '@components/common/Mascot';
+import { useNavigation }    from '@react-navigation/native';
+import { Colors }           from '@constants/colors';
+import { Fonts }            from '@constants/typography';
+import { Routes }           from '@constants/routes';
+import { useSessionStore }  from '@store/useSessionStore';
+import { useAppStore }      from '@store/useAppStore';
+import { WebcamService }    from '@services/camera/WebcamService';
+import { AudioService }     from '@services/audio/AudioService';
+import { Mascot }           from '@components/common/Mascot';
+import { useTokens, useResponsive } from '@responsive';
 import type { VisionCameraRef } from '@services/camera/WebcamService';
 
-const { width: SW, height: SH } = Dimensions.get('window');
-
-// ── Timeout tunggu kamera siap sebelum auto-capture ──────────
-const CAMERA_READY_TIMEOUT_MS = 3000;
-// ── Delay setelah capture sebelum navigasi (tampilkan flash) ──
-const POST_CAPTURE_DELAY_MS   = 400;
+const CAMERA_READY_DELAY_MS = 800;
+const POST_CAPTURE_DELAY_MS = 400;
 
 export const CameraScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-
   const {
-    sessionId,
-    currentPhotoIndex,
-    totalPhotos,
-    addCapturedPhoto,
-    frameId,
+    sessionId, currentPhotoIndex, totalPhotos, addCapturedPhoto,
   } = useSessionStore();
-
   const { cameraStatus } = useAppStore();
+  const T  = useTokens();
+  const rs = useResponsive();
 
-  // Camera ref — tidak masuk React state, tidak trigger re-render
-  const cameraRef = useRef<VisionCameraRef>(null);
-  const hasCapturedRef = useRef(false);   // Prevent double-capture
+  const cameraRef      = useRef<VisionCameraRef>(null);
+  const hasCapturedRef = useRef(false);
   const appStateRef    = useRef<AppStateStatus>('active');
 
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [errorMsg, setErrorMsg]           = useState<string | null>(null);
 
-  // Flash overlay animation
   const flashOpacity = useSharedValue(0);
+  const flashStyle   = useAnimatedStyle(() => ({ opacity: flashOpacity.value }));
 
-  // ── Lifecycle ──────────────────────────────────────────────
+  const isTabletLandscape = rs.isTablet && rs.isLandscape;
 
   useEffect(() => {
     hasCapturedRef.current = false;
-
-    // Register ref ke WebcamService
     WebcamService.setCameraRef(cameraRef);
 
-    // Tunggu kamera ready lalu capture
-    const readyTimer = setTimeout(() => {
-      setIsCameraReady(true);
-    }, 800); // Beri waktu VisionCamera initialize
-
-    // Monitor AppState — pause kamera saat app background
-    const sub = AppState.addEventListener('change', handleAppState);
+    const timer = setTimeout(() => setIsCameraReady(true), CAMERA_READY_DELAY_MS);
+    const sub   = AppState.addEventListener('change', (s: AppStateStatus) => {
+      appStateRef.current = s;
+    });
 
     return () => {
-      clearTimeout(readyTimer);
+      clearTimeout(timer);
       sub.remove();
-      // Release ref saat unmount — PENTING cegah memory leak
       WebcamService.releaseCameraRef();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-capture saat kamera ready
   useEffect(() => {
-    if (isCameraReady && !hasCapturedRef.current) {
-      triggerCapture();
-    }
+    if (isCameraReady && !hasCapturedRef.current) triggerCapture();
   }, [isCameraReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleAppState = useCallback((state: AppStateStatus) => {
-    appStateRef.current = state;
-  }, []);
+  const playShutter = useCallback(() => { AudioService.playShutter(); }, []);
 
-  // ── Capture ───────────────────────────────────────────────
+  const navigateNext = useCallback((nextIdx: number, total: number) => {
+    if (nextIdx < total) navigation.replace(Routes.Countdown);
+    else navigation.replace(Routes.Processing);
+  }, [navigation]);
 
   const triggerCapture = useCallback(async () => {
     if (hasCapturedRef.current || !sessionId) return;
-    if (appStateRef.current !== 'active') return;
-
+    if (appStateRef.current !== 'active')      return;
     hasCapturedRef.current = true;
 
-    // Flash effect — berjalan di UI thread via Reanimated
     flashOpacity.value = withSequence(
-      withTiming(1,   { duration: 60 }),
-      withTiming(0.6, { duration: 100 }),
-      withTiming(0,   { duration: 200 })
+      withTiming(1,   { duration: 60  }),
+      withTiming(0.5, { duration: 100 }),
+      withTiming(0,   { duration: 200 }),
     );
-
-    // Suara shutter
     runOnJS(playShutter)();
 
-    const result = await WebcamService.capturePhoto(
-      sessionId,
-      currentPhotoIndex
-    );
+    const result = await WebcamService.capturePhoto(sessionId, currentPhotoIndex);
 
     if (!result.success || !result.filePath) {
       setErrorMsg(result.error ?? 'Gagal mengambil foto');
@@ -137,92 +107,91 @@ export const CameraScreen: React.FC = () => {
       return;
     }
 
-    // Tambah ke session store
     addCapturedPhoto({
       index:      currentPhotoIndex,
       filePath:   result.filePath,
       capturedAt: result.capturedAt ?? new Date().toISOString(),
     });
 
-    // Navigasi setelah delay singkat (biarkan flash selesai)
     setTimeout(() => {
       runOnJS(navigateNext)(currentPhotoIndex + 1, totalPhotos);
     }, POST_CAPTURE_DELAY_MS);
-
-  }, [sessionId, currentPhotoIndex, totalPhotos, addCapturedPhoto, flashOpacity]);
-
-  // Harus dipanggil via runOnJS karena dipakai dalam Animated callback
-  const playShutter = () => {
-    AudioService.playShutter();
-  };
-
-  const navigateNext = useCallback((nextIndex: number, total: number) => {
-    if (nextIndex < total) {
-      // Masih ada foto lagi → kembali ke countdown
-      navigation.replace(Routes.Countdown);
-    } else {
-      // Semua foto selesai → ke processing
-      navigation.replace(Routes.Processing);
-    }
-  }, [navigation]);
-
-  // ── Retry saat error ───────────────────────────────────────
+  }, [
+    sessionId, currentPhotoIndex, totalPhotos, addCapturedPhoto,
+    flashOpacity, playShutter, navigateNext,
+  ]);
 
   const handleRetry = useCallback(() => {
     setErrorMsg(null);
     hasCapturedRef.current = false;
-    // Re-trigger capture
     setTimeout(triggerCapture, 300);
   }, [triggerCapture]);
 
-  // ── Animated styles ───────────────────────────────────────
-
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: flashOpacity.value,
-  }));
-
-  // ── Camera tidak ready ─────────────────────────────────────
-
   const currentDevice = WebcamService.getCurrentDevice();
-  const isConnected   = !!currentDevice;
+  const styles        = makeStyles(T, isTabletLandscape);
 
-  if (!isConnected) {
+  // ── No camera ────────────────────────────────────────────────
+  if (!currentDevice) {
     return (
-      <View style={styles.errorContainer}>
-        <Mascot mood="thinking" size={120} />
+      <View style={styles.errorFull}>
+        <Mascot mood="thinking" size={T.mascot.placeholder} />
         <Text style={styles.errorTitle}>📷 Kamera tidak terhubung</Text>
-        <Text style={styles.errorSub}>
-          Tancapkan webcam USB dan coba lagi
-        </Text>
+        <Text style={styles.errorSub}>Tancapkan webcam USB dan coba lagi</Text>
       </View>
     );
   }
 
-  // ── Render ────────────────────────────────────────────────
+  // ── Tablet landscape: split layout ───────────────────────────
+  if (isTabletLandscape) {
+    return (
+      <View style={styles.splitRoot}>
+        {/* Camera area 70% */}
+        <View style={styles.splitCamera}>
+          <CameraPreview
+            cameraRef={cameraRef}
+            device={currentDevice}
+            isActive={isCameraReady && appStateRef.current === 'active'}
+          />
+          <Animated.View style={[StyleSheet.absoluteFill, styles.flash, flashStyle]}
+            pointerEvents="none" />
+        </View>
 
+        {/* Control panel 30% */}
+        <View style={styles.splitPanel}>
+          <Text style={styles.panelCounter}>
+            📷 {currentPhotoIndex + 1} / {totalPhotos}
+          </Text>
+          <Mascot mood="countdown" size={T.mascot.corner} />
+          {errorMsg && (
+            <View style={styles.errorOverlay}>
+              <Text style={styles.errorOverlayText}>⚠️ {errorMsg}</Text>
+              <Text style={styles.errorRetryText} onPress={handleRetry}>
+                Coba lagi
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  // ── Fullscreen (phone / tablet portrait) ─────────────────────
   return (
-    <View style={styles.container}>
-
-      {/* Camera Preview — VisionCamera */}
+    <View style={styles.fullRoot}>
       <CameraPreview
         cameraRef={cameraRef}
         device={currentDevice}
         isActive={isCameraReady && appStateRef.current === 'active'}
       />
-
-      {/* Photo counter overlay */}
       <View style={styles.counterBadge}>
         <Text style={styles.counterText}>
           📷 {currentPhotoIndex + 1} / {totalPhotos}
         </Text>
       </View>
-
-      {/* Flash white overlay */}
-      <Animated.View style={[styles.flashOverlay, flashStyle]} pointerEvents="none" />
-
-      {/* Error state */}
+      <Animated.View style={[StyleSheet.absoluteFill, styles.flash, flashStyle]}
+        pointerEvents="none" />
       {errorMsg && (
-        <View style={styles.errorOverlay}>
+        <View style={styles.errorOverlayFull}>
           <Text style={styles.errorOverlayText}>⚠️ {errorMsg}</Text>
           <Text style={styles.errorRetryText} onPress={handleRetry}>
             Ketuk untuk coba lagi
@@ -233,21 +202,15 @@ export const CameraScreen: React.FC = () => {
   );
 };
 
-// ── CameraPreview component (isolate VisionCamera) ────────────
-// Dipisah agar Tree-shakeable dan mudah di-mock saat testing
+// ── CameraPreview — lazy-loads VisionCamera ───────────────────
 
 interface CameraPreviewProps {
   cameraRef: React.RefObject<VisionCameraRef>;
-  device: import('@types/camera.types').CameraDevice;
-  isActive: boolean;
+  device:    import('@types/camera.types').CameraDevice;
+  isActive:  boolean;
 }
 
-const CameraPreview: React.FC<CameraPreviewProps> = ({
-  cameraRef,
-  device,
-  isActive,
-}) => {
-  // Lazy-load VisionCamera untuk hemat startup time
+const CameraPreview: React.FC<CameraPreviewProps> = ({ cameraRef, device, isActive }) => {
   const [Camera, setCamera] = React.useState<React.ComponentType<any> | null>(null);
 
   useEffect(() => {
@@ -257,11 +220,12 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({
   }, []);
 
   if (!Camera) {
-    // Fallback placeholder saat modul loading / tidak tersedia
     return (
-      <View style={styles.cameraPlaceholder}>
-        <Text style={styles.placeholderEmoji}>📷</Text>
-        <Text style={styles.placeholderText}>Kamera menyala...</Text>
+      <View style={StyleSheet.absoluteFill}>
+        <View style={placeholderStyles.box}>
+          <Text style={placeholderStyles.emoji}>📷</Text>
+          <Text style={placeholderStyles.text}>Kamera menyala...</Text>
+        </View>
       </View>
     );
   }
@@ -275,102 +239,72 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({
       photo={true}
       video={false}
       audio={false}
-      // Hemat CPU: preview lebih rendah dari capture
-      fps={AppConfig.captureQuality > 0.9 ? 30 : 24}
-      // Disable fitur yang tidak perlu
       enableZoomGesture={false}
       enableHighQualityPhotos={true}
-      // Android specific: mencegah restart saat screen rotate
-      orientation="landscape"
     />
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-
-  // ── Camera error states ──────────────────────────────────
-  errorContainer: {
-    flex: 1,
-    backgroundColor: Colors.bgMain,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-    padding: 32,
-  },
-  errorTitle: {
-    ...UserTypography.screenTitle,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  errorSub: {
-    ...UserTypography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-
-  // ── Overlays ─────────────────────────────────────────────
-  counterBadge: {
-    position: 'absolute',
-    top: 24,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 30,
-  },
-  counterText: {
-    ...UserTypography.bodyLarge,
-    color: '#fff',
-    fontFamily: 'Nunito-Bold',
-  },
-
-  flashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#fff',
-    zIndex: 10,
-  },
-
-  errorOverlay: {
-    position: 'absolute',
-    bottom: 60,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(239,83,80,0.9)',
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  errorOverlayText: {
-    color: '#fff',
-    fontSize: 18,
-    fontFamily: 'Nunito-Bold',
-    textAlign: 'center',
-  },
-  errorRetryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'Nunito-Regular',
-    textDecorationLine: 'underline',
-  },
-
-  // ── Camera placeholder ────────────────────────────────────
-  cameraPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1a1a2e',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  placeholderEmoji: {
-    fontSize: 80,
-  },
-  placeholderText: {
-    color: '#fff',
-    fontSize: 20,
-    fontFamily: 'Nunito-Bold',
-  },
+const placeholderStyles = StyleSheet.create({
+  box:   { flex: 1, backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center', gap: 16 },
+  emoji: { fontSize: 72 },
+  text:  { color: '#fff', fontSize: 18, fontFamily: Fonts.bold },
 });
+
+// ── Style factory ─────────────────────────────────────────────
+
+function makeStyles(T: ReturnType<typeof useTokens>, isTabletLandscape: boolean) {
+  const sp = T.spacing;
+  const ft = T.font;
+  return StyleSheet.create({
+    // Fullscreen
+    fullRoot: { flex: 1, backgroundColor: '#000' },
+
+    // Split (tablet landscape)
+    splitRoot:   { flex: 1, flexDirection: 'row', backgroundColor: '#000' },
+    splitCamera: { flex: 7 },
+    splitPanel:  {
+      flex: 3, backgroundColor: Colors.bgMain,
+      justifyContent: 'center', alignItems: 'center',
+      gap: sp.xl, paddingHorizontal: sp.lg,
+    },
+    panelCounter: {
+      fontFamily: Fonts.bold, fontSize: ft.bodyLarge,
+      color: Colors.textPrimary, textAlign: 'center',
+    },
+
+    // Counter badge (fullscreen mode)
+    counterBadge: {
+      position: 'absolute', top: sp.xl, alignSelf: 'center',
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      paddingHorizontal: sp.lg, paddingVertical: sp.sm,
+      borderRadius: 30,
+    },
+    counterText: { fontFamily: Fonts.bold, fontSize: ft.bodyLarge, color: '#fff' },
+
+    // Flash overlay
+    flash: { backgroundColor: '#fff', zIndex: 10 },
+
+    // Error (no camera)
+    errorFull: {
+      flex: 1, backgroundColor: Colors.bgMain,
+      justifyContent: 'center', alignItems: 'center',
+      gap: sp.lg, padding: sp.xl,
+    },
+    errorTitle: { fontFamily: Fonts.extraBold, fontSize: ft.screenTitle, color: Colors.textPrimary, textAlign: 'center' },
+    errorSub:   { fontFamily: Fonts.semiBold,  fontSize: ft.body,        color: Colors.textSecondary, textAlign: 'center' },
+
+    // Error overlay (during capture)
+    errorOverlayFull: {
+      position: 'absolute', bottom: sp.xxl, alignSelf: 'center',
+      backgroundColor: 'rgba(239,83,80,0.9)', padding: sp.lg,
+      borderRadius: T.radius.lg, alignItems: 'center', gap: sp.sm,
+    },
+    errorOverlay: {
+      backgroundColor: Colors.errorLight, padding: sp.md,
+      borderRadius: T.radius.md, alignItems: 'center', gap: sp.sm,
+    },
+    errorOverlayText: { color: '#fff',         fontFamily: Fonts.bold,    fontSize: ft.body, textAlign: 'center' },
+    errorRetryText:   { color: Colors.textLight, fontFamily: Fonts.regular, fontSize: ft.label, textDecorationLine: 'underline' },
+  });
+}

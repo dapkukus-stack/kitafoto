@@ -19,8 +19,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '@constants/colors';
-import { AdminTypography, UserTypography } from '@constants/typography';
-import { Spacing, Shadow } from '@constants/dimensions';
+import { Fonts } from '@constants/typography';
+import { Shadow } from '@constants/dimensions';
+import { useTokens } from '@responsive';
 import { Routes } from '@constants/routes';
 import { useAdminStore } from '@store/useAdminStore';
 import { db } from '@database/DatabaseService';
@@ -44,6 +45,7 @@ const NUMPAD = [
 export const AdminLoginScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { setAdminAuthenticated, adminLoginError, setAdminLoginError } = useAdminStore();
+  const T = useTokens();
 
   const [pin, setPin] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -207,32 +209,34 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: 28,
-    padding: Spacing.xl,
+    padding: 32,
     width: 360,
     alignItems: 'center',
     ...Shadow.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: 20,
   },
   lockIcon: {
     fontSize: 48,
     marginBottom: 8,
   },
   title: {
-    ...AdminTypography.pageTitle,
+    fontFamily: Fonts.extraBold,
+    fontSize: 20,
     color: Colors.textPrimary,
     marginBottom: 4,
   },
   subtitle: {
-    ...AdminTypography.body,
+    fontFamily: Fonts.regular,
+    fontSize: 14,
     color: Colors.textSecondary,
   },
   pinContainer: {
     flexDirection: 'row',
     gap: 16,
-    marginVertical: Spacing.md,
+    marginVertical: 14,
   },
   pinDot: {
     width: 18,
@@ -250,14 +254,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
   },
   errorText: {
-    ...AdminTypography.small,
+    fontFamily: Fonts.regular,
+    fontSize: 13,
     color: Colors.error,
     height: 22,
     textAlign: 'center',
   },
   numpad: {
     gap: 12,
-    marginTop: Spacing.md,
+    marginTop: 14,
   },
   numpadRow: {
     flexDirection: 'row',
@@ -287,12 +292,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.errorLight,
   },
   cancelButton: {
-    marginTop: Spacing.lg,
+    marginTop: 20,
     paddingVertical: 8,
     paddingHorizontal: 24,
   },
   cancelText: {
-    ...AdminTypography.body,
+    fontFamily: Fonts.regular,
+    fontSize: 14,
     color: Colors.textSecondary,
   },
 });

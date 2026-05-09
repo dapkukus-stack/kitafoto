@@ -1,236 +1,201 @@
 /**
- * CountdownScreen — Countdown 3-2-1 sebelum foto
- * Animasi besar, suara lucu, progress "Foto X dari Y"
+ * CountdownScreen — Responsive & Orientation-aware v2
+ * ─────────────────────────────────────────────────────────────
+ * Semua angka countdown, progress dots, dan mascot
+ * menggunakan token dari useTokens() — otomatis scale per device.
+ *
+ * Landscape vs Portrait:
+ *   Portrait  → mascot bawah kanan, countdown center
+ *   Landscape → mascot samping kiri, countdown di kanan
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withSpring,
-  withTiming,
+  useSharedValue, useAnimatedStyle,
+  withSequence, withSpring, withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import { useNavigation } from '@react-navigation/native';
-import { Colors } from '@constants/colors';
-import { UserTypography } from '@constants/typography';
-import { Mascot } from '@components/common/Mascot';
-import { AudioService } from '@services/audio/AudioService';
-import { Routes } from '@constants/routes';
-import { useSessionStore } from '@store/useSessionStore';
-import { useEventStore } from '@store/useEventStore';
+import { useNavigation }       from '@react-navigation/native';
+import { Colors }              from '@constants/colors';
+import { Fonts }               from '@constants/typography';
+import { Routes }              from '@constants/routes';
+import { Mascot }              from '@components/common/Mascot';
+import { AudioService }        from '@services/audio/AudioService';
+import { useSessionStore }     from '@store/useSessionStore';
+import { useEventStore }       from '@store/useEventStore';
+import { useTokens, useResponsive } from '@responsive';
 
 export const CountdownScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { currentPhotoIndex, totalPhotos } = useSessionStore();
-  const { activeEvent } = useEventStore();
+  const { activeEvent }  = useEventStore();
+  const T  = useTokens();
+  const rs = useResponsive();
 
   const countdownSecs = activeEvent?.countdownSecs ?? 3;
+  const [count,   setCount]   = useState(countdownSecs);
+  const [showGo,  setShowGo]  = useState(false);
 
-  const [count, setCount] = useState(countdownSecs);
-  const [showGo, setShowGo] = useState(false);
+  const scale    = useSharedValue(0.3);
+  const opacity  = useSharedValue(0);
+  const bgPulse  = useSharedValue(1);
 
-  const scale = useSharedValue(0.3);
-  const opacity = useSharedValue(0);
-  const bgPulse = useSharedValue(1);
-
-  const playBeep = useCallback(async () => {
-    await AudioService.playCountdownBeep();
-  }, []);
-
-  const playGo = useCallback(async () => {
-    await AudioService.playCountdownGo();
-  }, []);
-
-  const goToCamera = useCallback(() => {
-    navigation.replace(Routes.Camera);
-  }, [navigation]);
+  const playBeep = useCallback(() => { AudioService.playCountdownBeep(); }, []);
+  const playGo   = useCallback(() => { AudioService.playCountdownGo();   }, []);
+  const goToCamera = useCallback(() => { navigation.replace(Routes.Camera); }, [navigation]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
 
     const tick = (current: number) => {
-      // Animasi angka muncul
-      scale.value = withSequence(
-        withSpring(1.3, { damping: 4, stiffness: 300 }),
-        withSpring(1, { damping: 10, stiffness: 200 })
-      );
-      opacity.value = withSequence(
-        withTiming(1, { duration: 100 }),
-        withTiming(0.7, { duration: 800 })
-      );
-
-      // Background pulse
-      bgPulse.value = withSequence(
-        withTiming(1.05, { duration: 150 }),
-        withTiming(1, { duration: 150 })
-      );
-
-      // Suara beep
+      scale.value  = withSequence(withSpring(1.3, { damping: 4 }), withSpring(1, { damping: 10 }));
+      opacity.value = withSequence(withTiming(1, { duration: 100 }), withTiming(0.7, { duration: 800 }));
+      bgPulse.value = withSequence(withTiming(1.04, { duration: 150 }), withTiming(1, { duration: 150 }));
       runOnJS(playBeep)();
 
       if (current > 1) {
-        timer = setTimeout(() => {
-          setCount(current - 1);
-          tick(current - 1);
-        }, 1000);
+        timer = setTimeout(() => { setCount(current - 1); tick(current - 1); }, 1000);
       } else {
-        // Countdown habis → "GO!"
         timer = setTimeout(() => {
           setShowGo(true);
           runOnJS(playGo)();
-
-          scale.value = withSequence(
-            withSpring(1.5, { damping: 3, stiffness: 300 }),
-            withSpring(1, { damping: 8 })
-          );
+          scale.value  = withSequence(withSpring(1.5, { damping: 3 }), withSpring(1, { damping: 8 }));
           opacity.value = withTiming(1);
-
-          // Pindah ke CameraScreen setelah animasi GO
-          timer = setTimeout(() => {
-            runOnJS(goToCamera)();
-          }, 700);
+          timer = setTimeout(() => { runOnJS(goToCamera)(); }, 700);
         }, 1000);
       }
     };
 
-    // Mulai countdown
     tick(countdownSecs);
-
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const numberStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+    opacity:   opacity.value,
   }));
-
   const bgStyle = useAnimatedStyle(() => ({
     transform: [{ scale: bgPulse.value }],
   }));
 
-  const countColor = showGo
-    ? Colors.success
-    : count === 1
-      ? Colors.error
-      : count === 2
-        ? Colors.warning
-        : Colors.primary;
+  const countColor = showGo ? Colors.success
+    : count === 1   ? Colors.error
+    : count === 2   ? Colors.warning
+    : Colors.primary;
+
+  // Responsive sizes
+  const circleSize = Math.min(rs.width, rs.height) * 0.4;
+  const isLandscape = rs.isLandscape;
+
+  const styles = makeStyles(T, circleSize, isLandscape);
 
   return (
     <View style={styles.container}>
       {/* Background circle pulse */}
       <Animated.View style={[styles.bgCircle, bgStyle, { borderColor: countColor }]} />
 
-      {/* Progress indicator */}
-      <View style={styles.progressContainer}>
+      {/* Progress badge */}
+      <View style={styles.progressBadge}>
         <Text style={styles.progressText}>
           📷 Foto {currentPhotoIndex + 1} dari {totalPhotos}
         </Text>
       </View>
 
-      {/* Mascot */}
-      <View style={styles.mascotContainer}>
-        <Mascot mood="countdown" size={100} />
+      {/* Main layout */}
+      <View style={isLandscape ? styles.rowLayout : styles.colLayout}>
+        {/* Countdown number */}
+        <Animated.Text style={[styles.countdown, numberStyle, { color: countColor }]}>
+          {showGo ? '✓' : count}
+        </Animated.Text>
+
+        {/* Mascot */}
+        <View style={isLandscape ? styles.mascotLandscape : styles.mascotPortrait}>
+          <Mascot mood="countdown" size={T.mascot.corner} />
+        </View>
       </View>
 
-      {/* Countdown number */}
-      <Animated.Text
-        style={[
-          styles.countdownNumber,
-          numberStyle,
-          { color: countColor },
-        ]}
-      >
-        {showGo ? '✓' : count}
-      </Animated.Text>
+      {/* Ready text */}
+      <Text style={styles.readyText}>{showGo ? 'Ayo senyum! 😄' : 'Bersiap...'}</Text>
 
-      {/* Label */}
-      <Text style={styles.readyText}>
-        {showGo ? 'Ayo senyum! 😄' : 'Bersiap...'}
-      </Text>
-
-      {/* Dots progress */}
-      <View style={styles.dotsContainer}>
+      {/* Dot progress */}
+      <View style={styles.dots}>
         {Array.from({ length: totalPhotos }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.dot,
-              i < currentPhotoIndex && styles.dotDone,
-              i === currentPhotoIndex && styles.dotActive,
-            ]}
-          />
+          <View key={i} style={[
+            styles.dot,
+            i < currentPhotoIndex && styles.dotDone,
+            i === currentPhotoIndex && styles.dotActive,
+          ]} />
         ))}
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bgMain,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bgCircle: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    borderWidth: 4,
-    borderColor: Colors.primary,
-    opacity: 0.2,
-  },
-  progressContainer: {
-    position: 'absolute',
-    top: 40,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 30,
-  },
-  progressText: {
-    ...UserTypography.bodyLarge,
-    color: Colors.textLight,
-    fontFamily: 'Nunito-Bold',
-  },
-  mascotContainer: {
-    position: 'absolute',
-    bottom: 60,
-    right: 60,
-  },
-  countdownNumber: {
-    ...UserTypography.countdown,
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 3, height: 3 },
-    textShadowRadius: 8,
-  },
-  readyText: {
-    ...UserTypography.screenTitle,
-    color: Colors.textSecondary,
-    marginTop: 16,
-  },
-  dotsContainer: {
-    position: 'absolute',
-    bottom: 40,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.border,
-  },
-  dotDone: {
-    backgroundColor: Colors.success,
-  },
-  dotActive: {
-    backgroundColor: Colors.primary,
-    width: 32,
-  },
-});
+function makeStyles(
+  T: ReturnType<typeof useTokens>,
+  circleSize: number,
+  isLandscape: boolean,
+) {
+  const sp = T.spacing;
+  const ft = T.font;
+  return StyleSheet.create({
+    container: {
+      flex: 1, backgroundColor: Colors.bgMain,
+      justifyContent: 'center', alignItems: 'center',
+    },
+    bgCircle: {
+      position: 'absolute',
+      width: circleSize, height: circleSize,
+      borderRadius: circleSize / 2,
+      borderWidth: 4, opacity: 0.18,
+    },
+
+    // Layouts
+    colLayout: { alignItems: 'center', justifyContent: 'center' },
+    rowLayout: { flexDirection: 'row', alignItems: 'center', gap: sp.xxl },
+
+    // Countdown
+    countdown: {
+      fontFamily: Fonts.black,
+      fontSize:   ft.countdown,
+      lineHeight: ft.countdown * 1.1,
+      letterSpacing: -4,
+      textShadowColor:  'rgba(0,0,0,0.08)',
+      textShadowOffset: { width: 3, height: 3 },
+      textShadowRadius: 8,
+    },
+
+    // Mascot positioning
+    mascotPortrait:  { marginTop: sp.lg },
+    mascotLandscape: {},
+
+    // Labels
+    readyText: {
+      position: 'absolute', bottom: circleSize * 0.55,
+      fontFamily: Fonts.extraBold, fontSize: ft.screenTitle,
+      color: Colors.textSecondary,
+    },
+
+    // Progress badge
+    progressBadge: {
+      position: 'absolute', top: sp.xl, alignSelf: 'center',
+      backgroundColor: Colors.primary, paddingHorizontal: sp.lg, paddingVertical: sp.sm,
+      borderRadius: Radius_pill,
+    },
+    progressText: {
+      fontFamily: Fonts.bold, fontSize: ft.bodyLarge, color: '#fff',
+    },
+
+    // Dots
+    dots: { position: 'absolute', bottom: sp.xl, flexDirection: 'row', gap: sp.sm },
+    dot: {
+      width: 14, height: 14, borderRadius: 7,
+      backgroundColor: Colors.border,
+    },
+    dotDone:   { backgroundColor: Colors.success },
+    dotActive: { backgroundColor: Colors.primary, width: 28 },
+  });
+}
+
+const Radius_pill = 50;
